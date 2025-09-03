@@ -12,4 +12,3 @@ The project currently processes MP4 videos to detect and track user positions an
 
 - Connect the game to a mobile device for control input
 - Integrate with a webcam for live streaming and motion control
-- Add gesture recognition for a more interactive experience
