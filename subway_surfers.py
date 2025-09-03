@@ -292,20 +292,21 @@ def detect_humans(frame, net, classes, movement_detector):
     
     return frame
 
-def play_video(video_path):
+def play_video(video_path, output_path=None, save_only=False):
     """
     Play an MP4 video file using OpenCV with human detection and movement tracking.
+    Optionally save output to an MP4 file instead of displaying it.
     
     Args:
         video_path (str): Path to the MP4 file
+        output_path (str, optional): Path to save the output video with annotations. Defaults to None.
+        save_only (bool, optional): If True, only save the video without displaying it. Defaults to False.
     """
     # Load the object detection model
     net, classes = load_model()
     
     # Open the video file
     cap = cv2.VideoCapture(video_path)
-    
-    # Check if the video was opened successfully
     if not cap.isOpened():
         print(f"Error: Could not open video file {video_path}")
         return
@@ -314,6 +315,21 @@ def play_video(video_path):
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS)
+
+    # Setup video writer if output path is specified or in save_only mode
+    video_writer = None
+    if output_path:
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Codec for MP4 format
+        video_writer = cv2.VideoWriter(output_path, fourcc, fps, (frame_width, frame_height))
+        print(f"Saving output to: {output_path}")
+        print(f"Output video: {frame_width}x{frame_height} at {fps} fps")
+        
+        if save_only:
+            print("Running in save-only mode (no display)...")
+            print("Processing frames...")
+    elif save_only:
+        print("Error: save_only mode requires an output path")
+        return
     
     # Print video information
     print(f"Video resolution: {frame_width}x{frame_height}")
@@ -322,9 +338,10 @@ def play_video(video_path):
     # Create movement detector
     movement_detector = MovementDetector(frame_width, frame_height)
     
-    # Create a window to display the video
+    # Create a window to display the video if not in save_only mode
     window_name = "Video Player with Combined Movement Detection"
-    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    if not save_only:
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     
     # For movement tracking display
     font = cv2.FONT_HERSHEY_SIMPLEX
@@ -337,9 +354,9 @@ def play_video(video_path):
         # Read a frame from the video
         ret, frame = cap.read()
         frame_count += 1
-        if frame_count % 2 == 0:
+        if frame_count % 2 == 0:  # Skip every other frame for better performance
             continue
-        
+            
         # Break the loop if we've reached the end of the video
         if not ret:
             break
@@ -347,7 +364,7 @@ def play_video(video_path):
         # Detect humans in the frame, track movement, and draw bounding boxes
         if net is not None and classes is not None:
             frame = detect_humans(frame, net, classes, movement_detector)
-        
+            
         # Add combined movement classification explanation
         cv2.putText(frame, "Movement Classification: [Horizontal]+[Vertical]", 
                    (10, 30), font, font_scale, font_color, line_type)
@@ -368,35 +385,53 @@ def play_video(video_path):
             cv2.putText(frame, "Press 'r' to reset reference position and path", 
                        (10, 210), font, 0.7, (0, 0, 255), line_type)
         
-        # Display the frame
-        cv2.imshow(window_name, frame)
+        # Write the frame to the output video if specified
+        if video_writer is not None:
+            video_writer.write(frame)
         
-        # Handle key presses
-        key = cv2.waitKey(int(1000/fps)) & 0xFF
-        if key == ord('r'):
-            # Reset reference position and clear path history
-            movement_detector.reference_x = None
-            movement_detector.reference_y = None
-            movement_detector.reference_width = None
-            movement_detector.reference_height = None
-            movement_detector.position_history = []  # Clear the movement path
-            print("Reference position and movement path reset. Next detection will set a new reference.")
-        # Exit if 'q' is pressed or window is closed
-        elif key == ord('q') or cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
-            break
+        # Display the frame if not in save_only mode
+        if not save_only:
+            cv2.imshow(window_name, frame)
+            
+            # Handle key presses in display mode
+            key = cv2.waitKey(int(1000/fps)) & 0xFF
+            if key == ord('r'):
+                # Reset reference position and clear path history
+                movement_detector.reference_x = None
+                movement_detector.reference_y = None
+                movement_detector.reference_width = None
+                movement_detector.reference_height = None
+                movement_detector.position_history = []  # Clear the movement path
+                print("Reference position and movement path reset. Next detection will set a new reference.")
+            # Exit if 'q' is pressed or window is closed
+            elif key == ord('q') or cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
+                break
+        else:
+            # In save_only mode, just show progress
+            if frame_count % 30 == 0:  # Show progress every 30 frames
+                print(f"Processing frame {frame_count}")
+                
+            # Add a small delay to prevent CPU overload in save_only mode
+            cv2.waitKey(1)
     
     # Release resources
     cap.release()
-    cv2.destroyAllWindows()
+    if video_writer is not None:
+        video_writer.release()
+        print(f"Finished saving video to {output_path}")
+    
+    if not save_only:
+        cv2.destroyAllWindows()
 
 def main():
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Play an MP4 video file using OpenCV.')
+    parser = argparse.ArgumentParser(description='Play an MP4 video file using OpenCV with human detection.')
     parser.add_argument('video_path', type=str, help='Path to the MP4 file')
+    parser.add_argument('--save', type=str, help='Save output to specified MP4 file path (will not display video)')
     args = parser.parse_args()
     
-    # Play the video
-    play_video(args.video_path)
+    # Play the video (or save it if --save is specified)
+    play_video(args.video_path, output_path=args.save, save_only=args.save is not None)
 
 if __name__ == "__main__":
     main()
