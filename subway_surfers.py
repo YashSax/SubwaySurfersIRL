@@ -5,9 +5,10 @@ import os
 import numpy as np
 import time
 
-# Constants for movement thresholds
-HORIZ_THRESHOLD = 0.15  # 15% of frame width for left/right movement
-VERT_THRESHOLD = 0.05   # 5% of frame height for jump/duck movement
+# Constants for movement thresholds - now based on the initial bounding box size
+HORIZ_BOX_THRESHOLD = 0.35  # 35% of initial bounding box width for left/right movement
+JUMP_BOX_THRESHOLD = 0.05   # 5% of initial bounding box height for jump detection
+DUCK_BOX_THRESHOLD = 0.15   # 15% of initial bounding box height for duck detection
 
 class MovementDetector:
     def __init__(self, frame_width, frame_height):
@@ -18,36 +19,56 @@ class MovementDetector:
         self.reference_height = None
         self.reference_width = None
         
-        # Movement thresholds in pixels
-        self.horiz_threshold = int(frame_width * HORIZ_THRESHOLD)
-        self.vert_threshold = int(frame_height * VERT_THRESHOLD)
+        # Movement thresholds in pixels - will be set when reference box is detected
+        self.horiz_threshold = None
+        self.jump_threshold = None
+        self.duck_threshold = None
         
         # For filtering out jitter
         self.horiz_history = []
         self.vert_history = []
         self.history_size = 3
         
+        # For tracking movement path
+        self.position_history = []
+        self.max_path_length = 150  # Maximum number of points to keep in the path
+        
     def set_reference(self, center_x, center_y, width, height):
-        """Set reference position for the detected person"""
+        """Set reference position and thresholds based on the detected person's bounding box"""
         self.reference_x = center_x
         self.reference_y = center_y
         self.reference_width = width
         self.reference_height = height
+        
+        # Set thresholds based on the initial bounding box dimensions
+        self.horiz_threshold = int(width * HORIZ_BOX_THRESHOLD)
+        self.jump_threshold = int(height * JUMP_BOX_THRESHOLD)
+        self.duck_threshold = int(height * DUCK_BOX_THRESHOLD)
+        
         print(f"Reference position set: ({center_x}, {center_y}), size: {width}x{height}")
+        print(f"Movement thresholds: horizontal={self.horiz_threshold}px, jump={self.jump_threshold}px, duck={self.duck_threshold}px")
         
     def detect_movement(self, center_x, center_y, width, height):
-        """Detect movement based on current position compared to reference"""
+        """Detect movement based on current position compared to reference bounding box"""
         # Set reference position if this is the first detection
         if self.reference_x is None:
             self.set_reference(center_x, center_y, width, height)
             return "middle+standing"
+            
+        # Make sure thresholds are set
+        if self.horiz_threshold is None or self.jump_threshold is None or self.duck_threshold is None:
+            self.horiz_threshold = int(width * HORIZ_BOX_THRESHOLD)
+            self.jump_threshold = int(height * JUMP_BOX_THRESHOLD)
+            self.duck_threshold = int(height * DUCK_BOX_THRESHOLD)
         
-        # Determine horizontal movement (left/middle/right)
+        # Determine horizontal movement (left/middle/right) based on box center
         horizontal_diff = center_x - self.reference_x
         vertical_diff = center_y - self.reference_y
+        
+        # Also track box size change for ducking detection
         height_ratio = height / self.reference_height if self.reference_height > 0 else 1
         
-        # Classify horizontal position
+        # Classify horizontal position using bounding box-based thresholds
         if horizontal_diff < -self.horiz_threshold:
             h_position = "left"
         elif horizontal_diff > self.horiz_threshold:
@@ -55,10 +76,10 @@ class MovementDetector:
         else:
             h_position = "middle"
             
-        # Classify vertical action
-        if vertical_diff < -self.vert_threshold:
+        # Classify vertical action using separate thresholds for jump and duck
+        if vertical_diff < -self.jump_threshold:  # More sensitive threshold for jump
             v_action = "jump"
-        elif vertical_diff > self.vert_threshold or height_ratio < 0.8:
+        elif vertical_diff > self.duck_threshold or height_ratio < 0.8:  # Less sensitive threshold for duck
             v_action = "duck"
         else:
             v_action = "standing"
@@ -227,10 +248,34 @@ def detect_humans(frame, net, classes, movement_detector):
         # Draw the bounding box
         cv2.rectangle(frame, (startX, startY), (endX, endY), box_color, 2)
         
-        # Draw reference position (if set)
+        # Track the center position for path drawing
         if movement_detector.reference_x is not None:
+            # Add current position to history
+            movement_detector.position_history.append((center_x, center_y))
+            
+            # Limit history length
+            if len(movement_detector.position_history) > movement_detector.max_path_length:
+                movement_detector.position_history.pop(0)
+            
+            # Draw the path
+            if len(movement_detector.position_history) > 1:
+                for i in range(1, len(movement_detector.position_history)):
+                    # Color fades from red to yellow as points get older
+                    age_ratio = i / len(movement_detector.position_history)
+                    path_color = (0, int(255 * age_ratio), 255)  # Yellow to cyan gradient
+                    
+                    # Draw line segment
+                    pt1 = movement_detector.position_history[i-1]
+                    pt2 = movement_detector.position_history[i]
+                    cv2.line(frame, pt1, pt2, path_color, 2)
+        
+            # Draw reference position
             cv2.circle(frame, (movement_detector.reference_x, movement_detector.reference_y), 
                        5, (0, 0, 255), -1)  # Red dot for reference
+                       
+            # Draw current position
+            cv2.circle(frame, (center_x, center_y), 
+                      5, (255, 255, 255), -1)  # White dot for current position
         
         # Add labels
         confidence_label = f"Person: {best_confidence:.2f}"
@@ -306,27 +351,36 @@ def play_video(video_path):
         # Add combined movement classification explanation
         cv2.putText(frame, "Movement Classification: [Horizontal]+[Vertical]", 
                    (10, 30), font, font_scale, font_color, line_type)
-        cv2.putText(frame, "Horizontal: left, middle, right", 
+        cv2.putText(frame, "Horizontal: left, middle, right (based on box center)", 
                    (10, 60), font, font_scale, font_color, line_type)
-        cv2.putText(frame, "Vertical: standing, jump, duck", 
+        cv2.putText(frame, "Vertical: standing, jump, duck (based on box center)", 
                    (10, 90), font, font_scale, font_color, line_type)
                    
-        # Add reference position and controls information
+        # Show current movement thresholds if available
+        if movement_detector.horiz_threshold is not None and movement_detector.jump_threshold is not None and movement_detector.duck_threshold is not None:
+            thresh_text = f"Thresholds: Horiz={movement_detector.horiz_threshold}px, Jump={movement_detector.jump_threshold}px, Duck={movement_detector.duck_threshold}px"
+            cv2.putText(frame, thresh_text, (10, 150), font, 0.6, (255, 255, 255), 1)
+                   
+        # Add reference position, path tracking, and controls information
         if movement_detector.reference_x is not None:
-            cv2.putText(frame, "Red dot = Reference Position | Press 'r' to reset reference", 
-                       (10, 120), font, 0.7, (0, 0, 255), line_type)
+            cv2.putText(frame, "Red dot = Reference | White dot = Current | Cyan trail = Movement path", 
+                       (10, 180), font, 0.7, (0, 255, 255), line_type)
+            cv2.putText(frame, "Press 'r' to reset reference position and path", 
+                       (10, 210), font, 0.7, (0, 0, 255), line_type)
         
         # Display the frame
         cv2.imshow(window_name, frame)
         
-        # Reset reference position if 'r' is pressed
+        # Handle key presses
         key = cv2.waitKey(int(1000/fps)) & 0xFF
         if key == ord('r'):
+            # Reset reference position and clear path history
             movement_detector.reference_x = None
             movement_detector.reference_y = None
             movement_detector.reference_width = None
             movement_detector.reference_height = None
-            print("Reference position reset. Next detection will set a new reference.")
+            movement_detector.position_history = []  # Clear the movement path
+            print("Reference position and movement path reset. Next detection will set a new reference.")
         # Exit if 'q' is pressed or window is closed
         elif key == ord('q') or cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
             break
