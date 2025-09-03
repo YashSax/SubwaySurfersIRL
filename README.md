@@ -1,10 +1,12 @@
 # Subway Surfers
 
-A Python implementation of an endless runner game inspired by Subway Surfers, built with Pygame.
+A Python implementation of an endless runner game inspired by Subway Surfers.
 
 ## Current State
 
-The game currently features basic endless running mechanics with keyboard controls. The project includes a demo video showing the current gameplay.
+The project currently processes MP4 videos to detect and track user positions and poses. It can identify:
+- Horizontal positions: Left, Center, Right
+- Vertical poses: Standing, Ducking, Jumping
 
 ## Next Steps
 
