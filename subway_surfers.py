@@ -1,8 +1,10 @@
+from typing import Tuple, List, Dict, Optional, Union, Any
 import cv2
 import argparse
 import sys
 import os
 import numpy as np
+import numpy.typing as npt
 import time
 
 # Constants for movement thresholds - now based on the initial bounding box size
@@ -11,7 +13,7 @@ JUMP_BOX_THRESHOLD = 0.05   # 5% of initial bounding box height for jump detecti
 DUCK_BOX_THRESHOLD = 0.15   # 15% of initial bounding box height for duck detection
 
 class MovementDetector:
-    def __init__(self, frame_width, frame_height):
+    def __init__(self, frame_width: int, frame_height: int) -> None:
         self.frame_width = frame_width
         self.frame_height = frame_height
         self.reference_x = None
@@ -33,7 +35,7 @@ class MovementDetector:
         self.position_history = []
         self.max_path_length = 150  # Maximum number of points to keep in the path
         
-    def set_reference(self, center_x, center_y, width, height):
+    def set_reference(self, center_x: int, center_y: int, width: int, height: int) -> None:
         """Set reference position and thresholds based on the detected person's bounding box"""
         self.reference_x = center_x
         self.reference_y = center_y
@@ -48,7 +50,7 @@ class MovementDetector:
         print(f"Reference position set: ({center_x}, {center_y}), size: {width}x{height}")
         print(f"Movement thresholds: horizontal={self.horiz_threshold}px, jump={self.jump_threshold}px, duck={self.duck_threshold}px")
         
-    def detect_movement(self, center_x, center_y, width, height):
+    def detect_movement(self, center_x: int, center_y: int, width: int, height: int) -> str:
         """Detect movement based on current position compared to reference bounding box"""
         # Set reference position if this is the first detection
         if self.reference_x is None:
@@ -120,7 +122,7 @@ class MovementDetector:
         # Combine horizontal position and vertical action
         return f"{h_position}+{v_action}"
 
-def load_model():
+def load_model() -> Tuple[Optional[cv2.dnn_Net], Optional[List[str]]]:
     """
     Load the pre-trained MobileNet-SSD model for object detection.
     
@@ -158,7 +160,12 @@ def load_model():
     
     return net, classes
 
-def detect_humans(frame, net, classes, movement_detector):
+def detect_humans(
+    frame: npt.NDArray[np.uint8], 
+    net: Optional[cv2.dnn_Net], 
+    classes: Optional[List[str]], 
+    movement_detector: MovementDetector
+) -> npt.NDArray[np.uint8]:
     """
     Detect humans in a frame, track their movement, and draw bounding boxes.
     
@@ -292,7 +299,11 @@ def detect_humans(frame, net, classes, movement_detector):
     
     return frame
 
-def play_video(video_path, output_path=None, save_only=False):
+def play_video(
+    video_path: str, 
+    output_path: Optional[str] = None, 
+    save_only: bool = False
+) -> None:
     """
     Play an MP4 video file using OpenCV with human detection and movement tracking.
     Optionally save output to an MP4 file instead of displaying it.
@@ -423,12 +434,12 @@ def play_video(video_path, output_path=None, save_only=False):
     if not save_only:
         cv2.destroyAllWindows()
 
-def main():
+def main() -> None:
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Play an MP4 video file using OpenCV with human detection.')
     parser.add_argument('video_path', type=str, help='Path to the MP4 file')
     parser.add_argument('--save', type=str, help='Save output to specified MP4 file path (will not display video)')
-    args = parser.parse_args()
+    args: argparse.Namespace = parser.parse_args()
     
     # Play the video (or save it if --save is specified)
     play_video(args.video_path, output_path=args.save, save_only=args.save is not None)
