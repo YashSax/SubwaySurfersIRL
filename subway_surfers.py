@@ -13,6 +13,27 @@ HORIZ_BOX_THRESHOLD = 0.35  # 35% of initial bounding box width for left/right m
 JUMP_BOX_THRESHOLD = 0.02   # 2% of initial bounding box height for jump detection
 DUCK_BOX_THRESHOLD = 0.05   # 5% of initial bounding box height for duck detection
 
+# TODO: Let's make a smoother for the width of the bounding box, easier because it's stationary distribution
+# Do the same for jump and duck boxes. Don't have to go all the way with a kalman filter, just an average filter should do.
+def AverageSmoother():
+    def __init__(self):
+        self.count = 0
+        self.result = None
+    
+    def update(self, value: float) -> float:
+        if not self.result:
+            self.count += 1
+            self.result = value
+            return self.result
+        
+        self.result = (self.result * self.count + value) / (self.count + 1)
+        self.count += 1
+        return self.result
+    
+    def reset(self):
+        self.count = 0
+        self.result = None
+
 class PositionSmoother:
     def __init__(self):
         dt = 1.0  # timestep
@@ -24,8 +45,8 @@ class PositionSmoother:
         self.H = np.array([[1,0,0,0],
                            [0,1,0,0]])
         self.P = np.eye(4) * 500.0      # state covariance
-        self.Q = np.eye(4) * 0.03       # process noise
-        self.R = np.eye(2) * 3.0        # measurement noise
+        self.Q = np.eye(4) * 0.1       # process noise
+        self.R = np.eye(2) * 2.0        # measurement noise
         self.x = np.zeros((4,1))        # state vector [x, y, vx, vy]
 
     def update(self, x: float, y: float) -> Tuple[float, float]:
@@ -89,7 +110,7 @@ class MovementDetector:
         if self.reference_x is None:
             self.set_reference(center_x, center_y, width, height)
             return "middle+standing"
-            
+
         # Make sure thresholds are set
         if self.horiz_threshold is None or self.jump_threshold is None or self.duck_threshold is None:
             self.horiz_threshold = int(width * HORIZ_BOX_THRESHOLD)

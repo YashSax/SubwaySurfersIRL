@@ -150,16 +150,10 @@ def play_with_webcam():
     current_movement = "middle+standing"
     
     # Stream from webcam
-    frame_count = 0
     while True:
         # Capture frame-by-frame
         ret, frame = cap.read()
 
-        # For speed :')
-        frame_count += 1
-        if frame_count % 2 == 0:
-            continue
-        
         # If frame is read correctly, ret is True
         if not ret:
             print("Error: Can't receive frame. Exiting...")
