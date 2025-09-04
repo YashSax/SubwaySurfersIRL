@@ -13,6 +13,38 @@ HORIZ_BOX_THRESHOLD = 0.35  # 35% of initial bounding box width for left/right m
 JUMP_BOX_THRESHOLD = 0.02   # 5% of initial bounding box height for jump detection
 DUCK_BOX_THRESHOLD = 0.05   # 10% of initial bounding box height for duck detection
 
+class PositionSmoother:
+    def __init__(self):
+        dt = 1.0  # timestep
+        # State: [x, y, vx, vy]
+        self.A = np.array([[1,0,dt,0],
+                           [0,1,0,dt],
+                           [0,0,1,0],
+                           [0,0,0,1]])
+        self.H = np.array([[1,0,0,0],
+                           [0,1,0,0]])
+        self.P = np.eye(4) * 500.0      # state covariance
+        self.Q = np.eye(4) * 0.03       # process noise
+        self.R = np.eye(2) * 3.0        # measurement noise
+        self.x = np.zeros((4,1))        # state vector [x, y, vx, vy]
+
+    def update(self, x: float, y: float) -> Tuple[float, float]:
+        # ---- Predict ----
+        self.x = self.A @ self.x
+        self.P = self.A @ self.P @ self.A.T + self.Q
+
+        # ---- Measurement update ----
+        z = np.array([[x],[y]])
+        y_residual = z - (self.H @ self.x)
+        S = self.H @ self.P @ self.H.T + self.R
+        K = self.P @ self.H.T @ np.linalg.inv(S)
+
+        self.x = self.x + K @ y_residual
+        self.P = (np.eye(4) - K @ self.H) @ self.P
+
+        return float(self.x[0]), float(self.x[1])
+
+
 class MovementDetector:
     def __init__(self, frame_width: int, frame_height: int) -> None:
         self.frame_width = frame_width
@@ -178,7 +210,8 @@ def detect_humans(
     frame: npt.NDArray[np.uint8], 
     net: Optional[cv2.dnn_Net], 
     classes: Optional[List[str]], 
-    movement_detector: MovementDetector
+    movement_detector: MovementDetector,
+    smoother: PositionSmoother
 ) -> Tuple[npt.NDArray[np.uint8], str]:
     """
     Detect humans in a frame, track their movement, and draw bounding boxes.
@@ -237,8 +270,11 @@ def detect_humans(
         box_width = endX - startX
         box_height = endY - startY
 
+        updated_center_x, updated_center_y = smoother.update(center_x, center_y)
+        print(center_x, updated_center_x)
+
         # Detect movement - returns combined classification like "left+jump"
-        movement = movement_detector.detect_movement(center_x, center_y, box_width, box_height)
+        movement = movement_detector.detect_movement(updated_center_x, updated_center_y, box_width, box_height)
         
         # Parse the combined movement classification
         if "+" in movement:
@@ -273,7 +309,7 @@ def detect_humans(
         # Track the center position for path drawing
         if movement_detector.reference_x is not None:
             # Add current position to history
-            movement_detector.position_history.append((center_x, center_y))
+            movement_detector.position_history.append((updated_center_x, updated_center_y))
             
             # Limit history length
             if len(movement_detector.position_history) > movement_detector.max_path_length:
@@ -287,16 +323,16 @@ def detect_humans(
                     path_color = (0, int(255 * age_ratio), 255)  # Yellow to cyan gradient
                     
                     # Draw line segment
-                    pt1 = movement_detector.position_history[i-1]
-                    pt2 = movement_detector.position_history[i]
+                    pt1 = (int(movement_detector.position_history[i-1][0]), int(movement_detector.position_history[i-1][1]))
+                    pt2 = (int(movement_detector.position_history[i][0]), int(movement_detector.position_history[i][1]))
                     cv2.line(frame, pt1, pt2, path_color, 2)
         
             # Draw reference position
-            cv2.circle(frame, (movement_detector.reference_x, movement_detector.reference_y), 
+            cv2.circle(frame, (int(movement_detector.reference_x), int(movement_detector.reference_y)), 
                        5, (0, 0, 255), -1)  # Red dot for reference
                        
             # Draw current position
-            cv2.circle(frame, (center_x, center_y), 
+            cv2.circle(frame, (int(updated_center_x), int(updated_center_y)), 
                       5, (255, 255, 255), -1)  # White dot for current position
         
         # Add labels
@@ -356,12 +392,11 @@ def play_video(
         print("Error: save_only mode requires an output path")
         return
     
-    # Print video information
     print(f"Video resolution: {frame_width}x{frame_height}")
     print(f"FPS: {fps}")
     
-    # Create movement detector
     movement_detector = MovementDetector(frame_width, frame_height)
+    smoother = PositionSmoother()
     
     # Create a window to display the video if not in save_only mode
     window_name = "Video Player with Combined Movement Detection"
@@ -388,7 +423,7 @@ def play_video(
             
         # Detect humans in the frame, track movement, and draw bounding boxes
         if net is not None and classes is not None:
-            frame, _ = detect_humans(frame, net, classes, movement_detector)
+            frame, _ = detect_humans(frame, net, classes, movement_detector, smoother)
             
         # Add combined movement classification explanation
         cv2.putText(frame, "Movement Classification: [Horizontal]+[Vertical]", 
