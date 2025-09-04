@@ -126,6 +126,7 @@ class MovementDetector:
 def load_model() -> Tuple[Optional[cv2.dnn_Net], Optional[List[str]]]:
     """
     Load the pre-trained MobileNet-SSD model for object detection.
+    Sets up GPU acceleration if available.
     
     Returns:
         net: The neural network model
@@ -152,6 +153,18 @@ def load_model() -> Tuple[Optional[cv2.dnn_Net], Optional[List[str]]]:
     
     # Load the model
     net = cv2.dnn.readNetFromCaffe(prototxt_path, model_weights)
+    
+    # Try to use GPU acceleration
+    try:
+        # Check if OpenCV was built with CUDA support
+        if cv2.cuda.getCudaEnabledDeviceCount() > 0:
+            print("GPU acceleration is available. Using CUDA for neural network.")
+            net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+            net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+        else:
+            print("No CUDA-capable GPU detected. Using CPU.")
+    except:
+        print("OpenCV was not built with CUDA support or GPU is not compatible. Using CPU.")
     
     # Define the classes the model can detect
     classes = ["background", "aeroplane", "bicycle", "bird", "boat", "bottle", 
