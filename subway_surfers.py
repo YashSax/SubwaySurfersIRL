@@ -11,7 +11,7 @@ import time
 # Constants for movement thresholds - now based on the initial bounding box size
 HORIZ_BOX_THRESHOLD = 0.35  # 35% of initial bounding box width for left/right movement
 JUMP_BOX_THRESHOLD = 0.02   # 5% of initial bounding box height for jump detection
-DUCK_BOX_THRESHOLD = 0.15   # 15% of initial bounding box height for duck detection
+DUCK_BOX_THRESHOLD = 0.05   # 10% of initial bounding box height for duck detection
 
 class MovementDetector:
     def __init__(self, frame_width: int, frame_height: int) -> None:

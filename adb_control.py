@@ -13,16 +13,16 @@ def send_cmd(cmd: str):
 
 # --- Game controls ---
 def jump():
-    send_cmd("input swipe 500 1200 500 600 3")   # fast upward swipe
+    send_cmd("input swipe 500 1200 500 600 1")   # fast upward swipe
 
 def roll():
-    send_cmd("input swipe 500 600 500 1200 3")   # fast downward swipe
+    send_cmd("input swipe 500 600 500 1200 1")   # fast downward swipe
 
 def left():
-    send_cmd("input swipe 800 1000 300 1000 3")  # fast left swipe
+    send_cmd("input swipe 800 1000 300 1000 1")  # fast left swipe
 
 def right():
-    send_cmd("input swipe 300 1000 800 1000 3")  # fast right swipe
+    send_cmd("input swipe 300 1000 800 1000 1")  # fast right swipe
 
 # --- Keyboard listener ---
 def on_press(key):
