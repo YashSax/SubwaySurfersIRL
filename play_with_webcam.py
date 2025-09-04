@@ -9,7 +9,7 @@ from art import tprint
 import time
 
 # Import MovementDetector class from subway_surfers.py
-from subway_surfers import MovementDetector, load_model, detect_humans
+from subway_surfers import MovementDetector, PositionSmoother, load_model, detect_humans
 
 # Constants for movement thresholds
 HORIZ_BOX_THRESHOLD = 0.15  # 35% of initial bounding box width for left/right movement
@@ -138,6 +138,7 @@ def play_with_webcam():
     
     # Initialize movement detector with frame dimensions
     movement_detector = MovementDetector(frame_width, frame_height)
+    smoother = PositionSmoother()
     
     # Initialize game controller
     game_controller = GameController()
@@ -185,7 +186,7 @@ def play_with_webcam():
             movement_detector.vert_history = []
         
         # Run human detection on the frame
-        processed_frame, new_movement = detect_humans(frame, net, classes, movement_detector)
+        processed_frame, new_movement = detect_humans(frame, net, classes, movement_detector, smoother)
         
         # Get movement detection results
         if new_movement:
