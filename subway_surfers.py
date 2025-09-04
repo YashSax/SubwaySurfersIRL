@@ -4,12 +4,13 @@ import argparse
 import sys
 import os
 import numpy as np
+from numpy.char import center
 import numpy.typing as npt
 import time
 
 # Constants for movement thresholds - now based on the initial bounding box size
 HORIZ_BOX_THRESHOLD = 0.35  # 35% of initial bounding box width for left/right movement
-JUMP_BOX_THRESHOLD = 0.05   # 5% of initial bounding box height for jump detection
+JUMP_BOX_THRESHOLD = 0.02   # 5% of initial bounding box height for jump detection
 DUCK_BOX_THRESHOLD = 0.15   # 15% of initial bounding box height for duck detection
 
 class MovementDetector:
@@ -165,7 +166,7 @@ def detect_humans(
     net: Optional[cv2.dnn_Net], 
     classes: Optional[List[str]], 
     movement_detector: MovementDetector
-) -> npt.NDArray[np.uint8]:
+) -> Tuple[npt.NDArray[np.uint8], str]:
     """
     Detect humans in a frame, track their movement, and draw bounding boxes.
     
@@ -213,6 +214,7 @@ def detect_humans(
                 best_box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
     
     # Process the best person detection
+    movement = None
     if best_box is not None:
         (startX, startY, endX, endY) = best_box.astype("int")
         
@@ -221,7 +223,7 @@ def detect_humans(
         center_y = (startY + endY) // 2
         box_width = endX - startX
         box_height = endY - startY
-        
+
         # Detect movement - returns combined classification like "left+jump"
         movement = movement_detector.detect_movement(center_x, center_y, box_width, box_height)
         
@@ -287,7 +289,6 @@ def detect_humans(
         # Add labels
         confidence_label = f"Person: {best_confidence:.2f}"
         movement_label = f"Movement: {movement}"
-        print(movement)
         
         # Display labels
         y1 = startY - 35 if startY > 35 else startY + 35
@@ -297,7 +298,7 @@ def detect_humans(
         cv2.putText(frame, movement_label, (startX, y2), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 2)
     
-    return frame
+    return frame, movement
 
 def play_video(
     video_path: str, 
@@ -374,7 +375,7 @@ def play_video(
             
         # Detect humans in the frame, track movement, and draw bounding boxes
         if net is not None and classes is not None:
-            frame = detect_humans(frame, net, classes, movement_detector)
+            frame, _ = detect_humans(frame, net, classes, movement_detector)
             
         # Add combined movement classification explanation
         cv2.putText(frame, "Movement Classification: [Horizontal]+[Vertical]", 
