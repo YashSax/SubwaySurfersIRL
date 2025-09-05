@@ -10,8 +10,8 @@ import time
 
 # Constants for movement thresholds - now based on the initial bounding box size
 HORIZ_BOX_THRESHOLD = 0.35  # 35% of initial bounding box width for left/right movement
-JUMP_BOX_THRESHOLD = 0.02   # 2% of initial bounding box height for jump detection
-DUCK_BOX_THRESHOLD = 0.05   # 5% of initial bounding box height for duck detection
+JUMP_BOX_THRESHOLD = 0.01   # 2% of initial bounding box height for jump detection
+DUCK_BOX_THRESHOLD = 0.1   # 5% of initial bounding box height for duck detection
 
 # TODO: Let's make a smoother for the width of the bounding box, easier because it's stationary distribution
 # Do the same for jump and duck boxes. Don't have to go all the way with a kalman filter, just an average filter should do.
@@ -45,8 +45,8 @@ class PositionSmoother:
         self.H = np.array([[1,0,0,0],
                            [0,1,0,0]])
         self.P = np.eye(4) * 500.0      # state covariance
-        self.Q = np.eye(4) * 0.1       # process noise
-        self.R = np.eye(2) * 2.0        # measurement noise
+        self.Q = np.eye(4) * 0.1        # process noise
+        self.R = np.eye(2) * 1.0        # measurement noise
         self.x = np.zeros((4,1))        # state vector [x, y, vx, vy]
 
     def update(self, x: float, y: float) -> Tuple[float, float]:
