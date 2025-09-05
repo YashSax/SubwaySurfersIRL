@@ -1,0 +1,12 @@
+Refactor goals:
+
+Input -> any video stream
+
+PlayerDetector -> takes in the frame and returns the position of the player
+ActionExecutor -> takes in the position of the player and executes the swipe
+
+Should be able to run just the detection or both detection + action execution
+
+Don't really care about the output being saved to a video file. Just streaming to the screen is good enough.
+
+Want a unified interface for inputting live video vs. mp4
